@@ -19,7 +19,7 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="relative mt-20 overflow-hidden border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+    <footer className="relative aureus-reveal mt-20 overflow-hidden border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
       {/* Background decoration */}
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -76,10 +76,10 @@ export default function Footer() {
             <ul className="mt-5 space-y-3">
               <li>
                 <Link
-                  href="/"
+                  href="#features"
                   className="text-sm font-medium text-slate-500 transition hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
                 >
-                  Home
+                  Features
                 </Link>
               </li>
 

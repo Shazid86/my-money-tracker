@@ -6,6 +6,7 @@ import {
   ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -402,6 +403,8 @@ useEffect(() => {
     root.classList.remove("dark");
   }
 }, []);
+
+
 
 
 /* ============================================================
@@ -1129,7 +1132,7 @@ Math.max(
   return (
      <TooltipProvider>
     <main
-      className={`min-h-screen text-slate-900 transition-colors duration-300 dark:text-slate-100 ${
+      className={`aureus-page-enter min-h-screen text-slate-900 transition-colors duration-300 dark:text-slate-100 ${
         darkMode
           ? "bg-slate-950"
           : "bg-slate-100"
@@ -1222,22 +1225,31 @@ Math.max(
 
         {/* THEME TOGGLE */}
 
-        <Tooltip>
+<Tooltip>
   <TooltipTrigger
     render={
-      <button
-        type="button"
-        onClick={() =>
-          setDarkMode(!darkMode)
-        }
-        className="..."
-      >
-        {darkMode ? (
-          <Sun className="h-5 w-5" />
-        ) : (
-          <Moon className="h-5 w-5" />
-        )}
-      </button>
+      <label className="toggle text-base-content">
+        <input
+          type="checkbox"
+          checked={darkMode}
+          onChange={toggleTheme}
+          aria-label={
+            darkMode
+              ? "Switch to light mode"
+              : "Switch to dark mode"
+          }
+        />
+
+        <Sun
+          aria-label="sun"
+          className="h-5 w-5"
+        />
+
+        <Moon
+          aria-label="moon"
+          className="h-5 w-5"
+        />
+      </label>
     }
   />
 
@@ -1247,7 +1259,6 @@ Math.max(
       : "Switch to dark mode"}
   </TooltipContent>
 </Tooltip>
-
 
         {/* CTA */}
 
@@ -1337,7 +1348,7 @@ Math.max(
 
 <header
   id="home"
-  className="relative mb-12 overflow-hidden rounded-[32px] border border-slate-200/80 bg-white px-6 py-10 shadow-xl shadow-slate-200/20 dark:border-white/[0.08] dark:bg-slate-900/60 dark:shadow-black/20 sm:px-10 sm:py-14"
+  className="relative aureus-float mb-12 overflow-hidden rounded-[32px] border border-slate-200/80 bg-white px-6 py-10 shadow-xl shadow-slate-200/20 dark:border-white/[0.08] dark:bg-slate-900/60 dark:shadow-black/20 sm:px-10 sm:py-14"
 >
 
 
@@ -1631,7 +1642,7 @@ Math.max(
 
 <section
   id="features"
-  className="scroll-mt-32 py-6 sm:py-10"
+  className="scroll-mt-32 py-6 sm:py-10 aureus-reveal"
 >
   {/* ===================================================
       SECTION HEADER
@@ -1841,7 +1852,7 @@ Math.max(
 
 <section
   id="about"
-  className="scroll-mt-32 py-12 sm:py-16"
+  className="scroll-mt-32 py-12 sm:py-16 aureus-reveal"
 >
   <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
 
@@ -2161,7 +2172,7 @@ Math.max(
 
 <section
   id="faq"
-  className="scroll-mt-32 py-12 sm:py-16"
+  className="scroll-mt-32 py-12 sm:py-16 aureus-reveal"
 >
   <div className="relative overflow-hidden rounded-[36px] border border-slate-200/80 bg-white/70 px-5 py-10 shadow-xl shadow-slate-200/20 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-slate-900/60 dark:shadow-black/20 sm:px-8 sm:py-14 lg:px-12">
 
@@ -4372,6 +4383,50 @@ function StatCard({
       dot: "bg-violet-500",
     },
   };
+
+  //animation
+  useEffect(() => {
+    const elements =
+      document.querySelectorAll(
+        ".aureus-reveal"
+      );
+  
+    const observer =
+      new IntersectionObserver(
+        (entries) => {
+          entries.forEach(
+            (entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add(
+                  "is-visible"
+                );
+  
+                observer.unobserve(
+                  entry.target
+                );
+              }
+            }
+          );
+        },
+        {
+          threshold: 0.15,
+          rootMargin: "0px 0px -80px 0px",
+        }
+      );
+  
+    elements.forEach(
+      (element) => {
+        observer.observe(element);
+      }
+    );
+  
+    return () => {
+      observer.disconnect();
+    };
+
+    //animation
+  }, []);
+
 
   const currentAccent = accentClasses[accent];
 
