@@ -1997,7 +1997,7 @@ Math.max(
         RIGHT — AUREUS PHILOSOPHY CARD
     ================================================= */}
 
-    <div className="relative">
+    <div className="relative overflow-x-clip">
 
 
       {/* BACKGROUND GLOW */}
