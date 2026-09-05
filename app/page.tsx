@@ -2354,6 +2354,7 @@ Math.max(
 
           <Accordion
             type="single"
+            collapsible="true"
             className="w-full"
           >
 
