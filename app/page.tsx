@@ -10,6 +10,11 @@ import {
   useState,
 } from "react";
 
+import { useAuth } from "@/context/AuthContext";
+import { useDashboardSnapshot } from "@/hooks/useDashboardSnapshot";
+
+import AuthGateModal from "@/components/AuthGateModal";
+
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -45,6 +50,8 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+
+import DynamicNavbar from "@/components/DynamicNavbar";
 
                           // Shadcn UI
 // Dropdown-Menu
@@ -216,6 +223,20 @@ export default function ExpenseTrackerPage() {
 
   /*
    * ============================================================
+   * LIVE DASHBOARD SNAPSHOT (display-only)
+   * Signed-in users: hero card shows real dashboard data.
+   * Guests: card falls back to the interactive demo below.
+   * ============================================================
+   */
+
+  const { user } = useAuth();
+  const {
+    snapshot: liveSnapshot,
+    loading: snapshotLoading,
+  } = useDashboardSnapshot(user?.id ?? null);
+
+  /*
+   * ============================================================
    * APP STATE
    * ============================================================
    */
@@ -297,6 +318,15 @@ export default function ExpenseTrackerPage() {
 
   const [detailsTarget, setDetailsTarget] =
   useState<Transaction | null>(null);
+
+  /*
+   * Auth gate modal (demo CTA):
+   * opened by the Add/Update Expense submit.
+   * The variant (guest vs. member) is
+   * chosen inside AuthGateModal via useAuth().
+   */
+
+  const [authGateOpen, setAuthGateOpen] = useState(false);
 
   /*
    * ============================================================
@@ -709,123 +739,18 @@ useEffect(() => {
   ) => {
     event.preventDefault();
 
-    const amount = Number(form.amount);
-
     /*
-     * Validation
+     * MARKETING DEMO GATE
+     *
+     * The Transaction Logger is an interactive preview.
+     * Submitting always opens the auth prompt — guests get
+     * "Log in or Sign Up for the full experience" (Login /
+     * Sign Up), signed-in users get "Go to Dashboard for
+     * real experience". The variant is picked inside
+     * AuthGateModal from the live auth state listener.
      */
 
-    if (!form.itemName.trim()) {
-      showToast(
-        "Please enter an item name.",
-        "error"
-      );
-
-      return;
-    }
-
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      showToast(
-        "Please enter a valid expense amount.",
-        "error"
-      );
-
-      return;
-    }
-
-    if (!form.date) {
-      showToast(
-        "Please select a date.",
-        "error"
-      );
-
-      return;
-    }
-
-    /*
-     * UPDATE
-     */
-
-    if (editingId !== null) {
-      const updatedTransactions =
-        transactions.map(
-          (transaction) =>
-            transaction.id === editingId
-              ? {
-                  ...transaction,
-                  itemName:
-                    form.itemName.trim(),
-                  amount,
-                  category: form.category,
-                  date: form.date,
-                  notes: form.notes.trim(),
-                }
-              : transaction
-        );
-
-      setTransactions(
-        updatedTransactions
-      );
-
-      localStorage.setItem(
-        "takaflow-transactions",
-        JSON.stringify(
-          updatedTransactions
-        )
-      );
-
-      setEditingId(null);
-
-      resetForm();
-
-      showToast(
-        "Expense updated successfully."
-      );
-
-      return;
-    }
-
-    /*
-     * ADD
-     */
-
-    const newTransaction: Transaction = {
-      id: Date.now(),
-      itemName: form.itemName.trim(),
-      amount,
-      category: form.category,
-      date: form.date,
-      notes: form.notes.trim(),
-    };
-
-    const updatedTransactions = [
-      newTransaction,
-      ...transactions,
-    ];
-
-    setTransactions(
-      updatedTransactions
-    );
-
-    /*
-     * Immediately persist
-     */
-
-    localStorage.setItem(
-      "takaflow-transactions",
-      JSON.stringify(
-        updatedTransactions
-      )
-    );
-
-    resetForm();
-
-    showToast(
-      "Expense added successfully."
-    );
+    setAuthGateOpen(true);
   };
 
   /*
@@ -1091,6 +1016,70 @@ useEffect(() => {
 
   /*
    * ============================================================
+   * HERO CARD VALUES
+   * Live dashboard snapshot when signed in;
+   * teaser demo values otherwise. Display-only.
+   * ============================================================
+   */
+
+  const heroPeriod =
+    liveSnapshot?.period_label || currentMonth;
+
+  const heroPctRaw = liveSnapshot
+    ? liveSnapshot.budget_limit > 0
+      ? (liveSnapshot.budget_spent /
+          liveSnapshot.budget_limit) *
+        100
+      : 0
+    : spentPercentage;
+
+  const heroPct = Math.min(
+    Math.max(heroPctRaw, 0),
+    100
+  );
+
+  const heroOver = liveSnapshot
+    ? liveSnapshot.budget_limit > 0 &&
+      liveSnapshot.budget_spent >
+        liveSnapshot.budget_limit
+    : isOverBudget;
+
+  const heroWarn =
+    !heroOver &&
+    (liveSnapshot
+      ? liveSnapshot.budget_limit > 0 &&
+        (liveSnapshot.budget_spent /
+          liveSnapshot.budget_limit) *
+          100 >=
+          70
+      : isNeedsImprovement);
+
+  const heroDotCls = heroOver
+    ? "bg-rose-400"
+    : heroWarn
+      ? "bg-amber-400"
+      : "bg-emerald-400";
+
+  const heroTextCls = heroOver
+    ? "text-rose-300"
+    : heroWarn
+      ? "text-amber-300"
+      : "text-emerald-300";
+
+  const heroBarCls = heroOver
+    ? "bg-rose-400"
+    : heroWarn
+      ? "bg-amber-400"
+      : "bg-emerald-400";
+
+  const heroStatusLabel = heroOver
+    ? "Over budget"
+    : heroWarn
+      ? "Needs attention"
+      : "Looking healthy";
+
+  /*
+   * ============================================================
    * UI
    * ============================================================
    */
@@ -1154,192 +1143,10 @@ Math.max(
     PREMIUM WEBSITE NAVIGATION
 ===================================================== */}
 
-<nav className="sticky top-4 z-40 mb-12">
-
-  <div className="rounded-[28px] border border-slate-200/70 bg-white/80 px-4 py-3 shadow-xl shadow-slate-200/20 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-slate-950/70 dark:shadow-black/20 sm:px-5">
-
-    <div className="flex items-center justify-between gap-3">
-
-      {/* =================================================
-          LOGO
-      ================================================= */}
-
-<a
-  href="#home"
-  onClick={() => setMobileMenuOpen(false)}
-  className="group flex items-center gap-3"
->
-  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-400 via-emerald-500 to-green-600 shadow-lg shadow-emerald-500/20 transition duration-300 group-hover:scale-105 group-hover:shadow-emerald-500/40">
-    <div className="absolute inset-0 bg-white/10" />
-
-    <Wallet className="relative h-5 w-5 text-white" />
-  </div>
-
-  <div>
-    <p className="font-display text-xl font-bold tracking-tight text-slate-950 dark:text-white">
-      {BRAND_NAME}
-    </p>
-
-    <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-400">
-      Money Management
-    </p>
-  </div>
-</a>
+      {/* NAVIGATION */}
+      <DynamicNavbar />
 
 
-      {/* =================================================
-          DESKTOP NAVIGATION
-      ================================================= */}
-
-      <div className="hidden items-center rounded-2xl border border-slate-200/70 bg-slate-50/80 p-1 dark:border-white/[0.06] dark:bg-white/[0.04] lg:flex">
-
-        {[
-  ["Features", "#features"],
-  ["About", "#about"],
-  ["FAQ", "#faq"],
-].map(
-          ([label, href]) => (
-
-            <a
-              key={label}
-              href={href}
-              className="rounded-xl px-3.5 py-2 text-sm font-semibold text-slate-500 transition-all duration-200 hover:bg-white hover:text-slate-950 hover:shadow-sm dark:text-slate-400 dark:hover:bg-white/[0.07] dark:hover:text-white"
-            >
-
-              {label}
-
-            </a>
-
-          )
-        )}
-
-      </div>
-
-
-      {/* =================================================
-          RIGHT CONTROLS
-      ================================================= */}
-
-      <div className="flex items-center gap-2">
-
-
-        {/* THEME TOGGLE */}
-
-<Tooltip>
-  <TooltipTrigger
-    render={
-      <label className="toggle text-base-content">
-        <input
-          type="checkbox"
-          checked={darkMode}
-          onChange={toggleTheme}
-          aria-label={
-            darkMode
-              ? "Switch to light mode"
-              : "Switch to dark mode"
-          }
-        />
-
-        <Sun
-          aria-label="sun"
-          className="h-5 w-5"
-        />
-
-        <Moon
-          aria-label="moon"
-          className="h-5 w-5"
-        />
-      </label>
-    }
-  />
-
-  <TooltipContent>
-    {darkMode
-      ? "Switch to light mode"
-      : "Switch to dark mode"}
-  </TooltipContent>
-</Tooltip>
-
-        {/* CTA */}
-
-        <a
-          href="#dashboard"
-          className="group hidden items-center gap-2 rounded-xl ml-8 bg-slate-950 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-slate-950/15 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-emerald-500/25 dark:bg-emerald-500 dark:hover:bg-emerald-400 md:flex"
-        >
-
-          Get Started
-
-          <ArrowUpRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-
-        </a>
-
-
-        {/* MOBILE MENU */}
-
-        <button
-          type="button"
-          onClick={() =>
-            setMobileMenuOpen(
-              (current) => !current
-            )
-          }
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600 dark:border-white/[0.08] dark:text-slate-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400 lg:hidden"
-          aria-label="Toggle navigation"
-        >
-
-          <MoreHorizontal className="h-5 w-5" />
-
-        </button>
-
-      </div>
-
-    </div>
-
-
-    {/* =================================================
-        MOBILE NAVIGATION
-    ================================================= */}
-
-    {mobileMenuOpen && (
-
-      <div className="mt-4 border-t border-slate-200/70 pt-4 dark:border-white/[0.08] lg:hidden">
-
-        <div className="grid gap-1">
-
-          {[
-  ["Features", "#features"],
-  ["About", "#about"],
-  ["FAQ", "#faq"],
-].map(
-            ([label, href]) => (
-
-              <a
-                key={label}
-                href={href}
-                onClick={() =>
-                  setMobileMenuOpen(false)
-                }
-                className="flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-600 dark:text-slate-300 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400"
-              >
-
-                {label}
-
-                <ArrowUpRight className="h-4 w-4 opacity-50" />
-
-              </a>
-
-            )
-          )}
-
-        </div>
-
-      </div>
-
-    )}
-
-  </div>
-
-</nav>
 
 
 {/* =====================================================
@@ -1348,7 +1155,7 @@ Math.max(
 
 <header
   id="home"
-  className="relative aureus-float mb-12 overflow-hidden rounded-[32px] border border-slate-200/80 bg-white px-6 py-10 shadow-xl shadow-slate-200/20 dark:border-white/[0.08] dark:bg-slate-900/60 dark:shadow-black/20 sm:px-10 sm:py-14"
+  className="relative aureus-float mt-6 mb-12 overflow-hidden rounded-[32px] border border-slate-200/80 bg-white px-6 py-10 shadow-xl shadow-slate-200/20 dark:border-white/[0.08] dark:bg-slate-900/60 dark:shadow-black/20 sm:mt-8 sm:px-10 sm:py-14"
 >
 
 
@@ -1517,9 +1324,27 @@ Math.max(
 
             <h2 className="mt-2 font-display text-2xl font-bold tracking-tight text-white">
 
-              {currentMonth}
+              {heroPeriod}
 
             </h2>
+
+            {liveSnapshot && !snapshotLoading && (
+
+              <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+
+                <span className="relative flex h-1.5 w-1.5">
+
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+
+                </span>
+
+                Live · synced from dashboard
+
+              </span>
+
+            )}
 
           </div>
 
@@ -1553,24 +1378,14 @@ Math.max(
             <div className="mt-2 flex items-center gap-2">
 
               <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  isNeedsImprovement
-                    ? "bg-amber-400"
-                    : "bg-emerald-400"
-                }`}
+                className={`h-2.5 w-2.5 rounded-full ${heroDotCls}`}
               />
 
               <span
-                className={`text-sm font-bold ${
-                  isNeedsImprovement
-                    ? "text-amber-300"
-                    : "text-emerald-300"
-                }`}
+                className={`text-sm font-bold ${heroTextCls}`}
               >
 
-                {isNeedsImprovement
-                  ? "Needs attention"
-                  : "Looking healthy"}
+                {heroStatusLabel}
 
               </span>
 
@@ -1589,9 +1404,7 @@ Math.max(
 
             <p className="mt-1 font-display text-2xl font-bold text-white">
 
-              {walletBalance > 0
-                ? `${spentPercentage.toFixed(1)}%`
-                : "0.0%"}
+              {heroPct.toFixed(1)}%
 
             </p>
 
@@ -1605,16 +1418,9 @@ Math.max(
         <div className="mt-6 h-2.5 overflow-hidden rounded-full bg-white/[0.08]">
 
           <div
-            className={`h-full rounded-full transition-all duration-700 ${
-              isNeedsImprovement
-                ? "bg-amber-400"
-                : "bg-emerald-400"
-            }`}
+            className={`h-full rounded-full transition-all duration-700 ${heroBarCls}`}
             style={{
-              width: `${Math.min(
-                spentPercentage,
-                100
-              )}%`,
+              width: `${heroPct}%`,
             }}
           />
 
@@ -2558,7 +2364,7 @@ Math.max(
         ===================================================== */}
 
 <section
-  className="relative mb-8 overflow-hidden rounded-[32px] border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-200/30 dark:border-white/[0.08] dark:bg-slate-900/70 dark:shadow-black/30 sm:p-8 lg:p-10"
+  className="relative mb-5 overflow-hidden rounded-[32px] border border-slate-200/80 bg-white p-4 shadow-xl shadow-slate-200/30 dark:border-white/[0.08] dark:bg-slate-900/70 dark:shadow-black/30 sm:p-6"
 >
   {/* =============================================
       BACKGROUND ATMOSPHERE
@@ -2577,9 +2383,9 @@ Math.max(
         SECTION HEADER
     ============================================= */}
 
-    <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
           <Wallet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
 
           <span className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
@@ -2587,11 +2393,11 @@ Math.max(
           </span>
         </div>
 
-        <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
+        <h2 className="font-display text-xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-2xl">
           Your monthly wallet.
         </h2>
 
-        <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+        <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
           Set your available money for the month and keep an eye
           on how every penny moves.
         </p>
@@ -2624,15 +2430,15 @@ Math.max(
         MAIN GRID
     ============================================= */}
 
-    <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
       {/* =============================================
           LEFT SIDE — WALLET CONTROL
       ============================================= */}
 
-      <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-7">
+      <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-3.5 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-4">
         {/* LABEL */}
 
-        <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="mb-3 flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
               Total Money Available
@@ -2643,8 +2449,8 @@ Math.max(
             </p>
           </div>
 
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-            <Wallet className="h-5 w-5" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <Wallet className="h-4 w-4" />
           </div>
         </div>
 
@@ -2652,13 +2458,13 @@ Math.max(
 
         <label
           htmlFor="walletBalance"
-          className="mb-3 block text-xs font-bold text-slate-600 dark:text-slate-300"
+          className="mb-2 block text-xs font-bold text-slate-600 dark:text-slate-300"
         >
           Monthly Wallet / Budget
         </label>
 
         <div className="relative">
-          <div className="pointer-events-none absolute left-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl bg-emerald-500/10 font-display text-lg font-bold text-emerald-600 dark:text-emerald-400">
+          <div className="pointer-events-none absolute left-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-emerald-500/10 font-display text-base font-bold text-emerald-600 dark:text-emerald-400">
             ৳
           </div>
 
@@ -2671,7 +2477,7 @@ Math.max(
               handleWalletDraftChange(event.target.value)
             }
             placeholder="25000"
-            className="w-full rounded-2xl border border-slate-200 bg-white px-16 py-5 font-display text-3xl font-bold tracking-tight text-slate-950 outline-none transition-all placeholder:text-slate-300 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 dark:border-white/[0.08] dark:bg-slate-950/70 dark:text-white dark:placeholder:text-slate-700"
+            className="w-full rounded-2xl border border-slate-200 bg-white pl-14 pr-4 py-3 font-display text-2xl font-bold tracking-tight text-slate-950 outline-none transition-all placeholder:text-slate-300 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 dark:border-white/[0.08] dark:bg-slate-950/70 dark:text-white dark:placeholder:text-slate-700"
           />
         </div>
 
@@ -2702,7 +2508,7 @@ Math.max(
         <button
           type="button"
           onClick={saveWallet}
-          className="group mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-black text-white shadow-xl shadow-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-emerald-500/30 active:translate-y-0"
+          className="group mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-2.5 text-sm font-black text-white shadow-xl shadow-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-emerald-500/30 active:translate-y-0"
         >
           <Save className="h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
 
@@ -2714,7 +2520,7 @@ Math.max(
           RIGHT SIDE — MONEY OVERVIEW
       ============================================= */}
 
-      <div className="rounded-[28px] bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/15 dark:bg-black/30 sm:p-7">
+      <div className="rounded-[28px] bg-slate-950 p-4 text-white shadow-xl shadow-slate-950/15 dark:bg-black/30 sm:p-5">
         {/* TOP */}
 
         <div className="flex items-start justify-between gap-4">
@@ -2745,7 +2551,7 @@ Math.max(
 
         {/* MAIN REMAINING */}
 
-        <div className="mt-8">
+        <div className="mt-5">
           <p className="text-sm font-medium text-slate-400">
             {isOverBudget
               ? "Amount over budget"
@@ -2753,7 +2559,7 @@ Math.max(
           </p>
 
           <p
-            className={`mt-2 font-display text-4xl font-bold tracking-tight sm:text-5xl ${
+            className={`mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl ${
               isOverBudget
                 ? "text-rose-400"
                 : "text-emerald-400"
@@ -2767,8 +2573,8 @@ Math.max(
 
         {/* PROGRESS */}
 
-        <div className="mt-8">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="mt-5">
+          <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-medium text-slate-400">
               Monthly usage
             </span>
@@ -2786,7 +2592,7 @@ Math.max(
             </span>
           </div>
 
-          <div className="h-3 overflow-hidden rounded-full bg-white/[0.08]">
+          <div className="h-2.5 overflow-hidden rounded-full bg-white/[0.08]">
             <div
               className={`h-full rounded-full transition-all duration-700 ${
                 isNeedsImprovement
@@ -2805,23 +2611,23 @@ Math.max(
 
         {/* FINANCIAL NUMBERS */}
 
-        <div className="mt-7 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4">
+        <div className="mt-5 grid grid-cols-2 gap-2.5">
+          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
               Total Spent
             </p>
 
-            <p className="mt-2 font-display text-lg font-bold text-white">
+            <p className="mt-1.5 font-display text-lg font-bold text-white">
               {formatBDT(totalSpent)}
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4">
+          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
               Total Budget
             </p>
 
-            <p className="mt-2 font-display text-lg font-bold text-white">
+            <p className="mt-1.5 font-display text-lg font-bold text-white">
               {formatBDT(walletBalance)}
             </p>
           </div>
@@ -2830,14 +2636,14 @@ Math.max(
         {/* STATUS */}
 
         <div
-          className={`mt-5 flex items-center gap-3 rounded-2xl border p-4 ${
+          className={`mt-4 flex items-center gap-3 rounded-2xl border p-3 ${
             isNeedsImprovement
               ? "border-rose-500/15 bg-rose-500/10"
               : "border-emerald-500/15 bg-emerald-500/10"
           }`}
         >
           <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
               isNeedsImprovement
                 ? "bg-rose-500/15 text-rose-400"
                 : "bg-emerald-500/15 text-emerald-400"
@@ -2880,7 +2686,7 @@ Math.max(
         ===================================================== */}
 
         {isOverBudget && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 dark:border-rose-900 dark:bg-rose-950/30">
+          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-900 dark:bg-rose-950/30">
 
             <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-500" />
 
@@ -2909,7 +2715,7 @@ Math.max(
 
         <section
           id="dashboard"
-          className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
         >
 
           <StatCard
@@ -2987,13 +2793,13 @@ Math.max(
             MAIN CONTENT
         ===================================================== */}
 
-        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
 
           {/* =================================================
               EXPENSE FORM
           ================================================= */}
 
-<section className="relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-200/20 transition-all dark:border-white/[0.08] dark:bg-slate-900/70 dark:shadow-black/20 sm:p-8">
+<section className="relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-white p-4 shadow-xl shadow-slate-200/20 transition-all dark:border-white/[0.08] dark:bg-slate-900/70 dark:shadow-black/20 sm:p-6">
   {/* Decorative background */}
 
   <div className="pointer-events-none absolute inset-0">
@@ -3006,9 +2812,9 @@ Math.max(
 
     {/* HEADER */}
 
-    <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex items-start gap-4">
-        <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-[20px] bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">
           {editingId !== null ? (
             <Pencil className="h-5 w-5" />
           ) : (
@@ -3027,13 +2833,13 @@ Math.max(
             </span>
           </div>
 
-          <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
+          <h2 className="font-display text-xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-2xl">
             {editingId !== null
               ? "Edit Expense"
               : "Add a new expense"}
           </h2>
 
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+          <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
             {editingId !== null
               ? "Update the transaction details and keep your financial records accurate."
               : "Track every purchase—yes, even that suspiciously expensive blue pen."}
@@ -3064,7 +2870,7 @@ Math.max(
 
     <form
       onSubmit={handleAddExpense}
-      className="space-y-6"
+      className="space-y-4"
     >
       {/* ITEM NAME */}
 
@@ -3095,13 +2901,13 @@ Math.max(
             )
           }
           placeholder="e.g. Blue pen"
-          className="h-13 w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:hover:border-white/[0.12] dark:focus:border-emerald-500 dark:focus:bg-white/[0.06]"
+          className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:hover:border-white/[0.12] dark:focus:border-emerald-500 dark:focus:bg-white/[0.06]"
         />
       </div>
 
       {/* AMOUNT + CATEGORY */}
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         {/* AMOUNT */}
 
         <div>
@@ -3119,7 +2925,7 @@ Math.max(
           </div>
 
           <div className="relative">
-            <div className="pointer-events-none absolute left-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-emerald-500/10 text-sm font-black text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+            <div className="pointer-events-none absolute left-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-emerald-500/10 text-sm font-black text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
               ৳
             </div>
 
@@ -3139,7 +2945,7 @@ Math.max(
                 )
               }
               placeholder="0"
-              className="h-13 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-16 pr-5 text-base font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:hover:border-white/[0.12] dark:focus:border-emerald-500 dark:focus:bg-white/[0.06]"
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-14 pr-4 text-base font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:hover:border-white/[0.12] dark:focus:border-emerald-500 dark:focus:bg-white/[0.06]"
             />
           </div>
         </div>
@@ -3225,7 +3031,7 @@ Math.max(
                 })
               )
             }
-            className="h-13 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-5 text-sm font-semibold text-slate-900 outline-none transition-all hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:hover:border-white/[0.12] dark:focus:border-emerald-500 dark:focus:bg-white/[0.06]"
+            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-5 text-sm font-semibold text-slate-900 outline-none transition-all hover:border-slate-300 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white dark:hover:border-white/[0.12] dark:focus:border-emerald-500 dark:focus:bg-white/[0.06]"
           />
         </div>
       </div>
@@ -3250,7 +3056,7 @@ Math.max(
 
         <textarea
           id="notes"
-          rows={5}
+          rows={4}
           value={form.notes}
           onChange={(event) =>
             setForm(
@@ -3268,10 +3074,10 @@ Math.max(
 
       {/* ACTIONS */}
 
-      <div className="space-y-3 border-t border-slate-200/80 pt-6 dark:border-white/[0.08]">
+      <div className="space-y-3 border-t border-slate-200/80 pt-4 dark:border-white/[0.08]">
         <button
           type="submit"
-          className="group flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-xl hover:shadow-emerald-500/25 active:translate-y-0"
+          className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-xl hover:shadow-emerald-500/25 active:translate-y-0"
         >
           {editingId !== null ? (
             <Check className="h-5 w-5" />
@@ -3302,12 +3108,12 @@ Math.max(
               BREAKDOWN + STATUS
           ================================================= */}
 
-<div className="space-y-6">
+<div className="space-y-4">
   {/* =============================================
       SPENDING INTELLIGENCE
   ============================================= */}
 
-  <section className="relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-200/20 dark:border-white/[0.08] dark:bg-slate-900/70 dark:shadow-black/20 sm:p-8">
+  <section className="relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-white p-4 shadow-xl shadow-slate-200/20 dark:border-white/[0.08] dark:bg-slate-900/70 dark:shadow-black/20 sm:p-6">
     {/* Background atmosphere */}
 
     <div className="pointer-events-none absolute inset-0">
@@ -3318,7 +3124,7 @@ Math.max(
     <div className="relative">
       {/* Header */}
 
-      <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-950/10 dark:bg-white dark:text-slate-950">
             <LayoutDashboard className="h-5 w-5" />
@@ -3333,11 +3139,11 @@ Math.max(
               </span>
             </div>
 
-            <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
+            <h2 className="font-display text-xl font-bold tracking-tight text-slate-950 dark:text-white">
               Spending breakdown
             </h2>
 
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
               See exactly where your money is going and which
               categories are consuming the largest share.
             </p>
@@ -3427,7 +3233,7 @@ Math.max(
   ============================================= */}
 
   <section
-    className={`relative overflow-hidden rounded-[32px] border p-6 shadow-xl sm:p-8 ${
+    className={`relative overflow-hidden rounded-[32px] border p-4 shadow-xl sm:p-6 ${
       isNeedsImprovement
         ? "border-rose-200/80 bg-rose-50/70 shadow-rose-100/40 dark:border-rose-500/15 dark:bg-rose-500/[0.06] dark:shadow-black/20"
         : "border-emerald-200/80 bg-emerald-50/70 shadow-emerald-100/40 dark:border-emerald-500/15 dark:bg-emerald-500/[0.06] dark:shadow-black/20"
@@ -4323,6 +4129,15 @@ Math.max(
   </SheetContent>
 
 </Sheet>
+
+{/* ============================================================
+    AUTH GATE MODAL (demo CTA)
+============================================================ */}
+
+<AuthGateModal
+  open={authGateOpen}
+  onClose={() => setAuthGateOpen(false)}
+/>
 
     </main>
 

@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+
 import Link from "next/link";
 
 import {
@@ -18,8 +22,49 @@ import {
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
+  const footerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const node = footerRef.current;
+
+    if (!node) {
+      return;
+    }
+
+    if (typeof IntersectionObserver === "undefined") {
+      node.classList.add("is-visible");
+
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      {
+        threshold: 0.15,
+        rootMargin: "0px 0px -80px 0px",
+      }
+    );
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   return (
-    <footer className="relative aureus-reveal mt-20 overflow-hidden border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+    <footer
+      ref={footerRef}
+      className="relative aureus-reveal mt-20 overflow-hidden border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+    >
       {/* Background decoration */}
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">

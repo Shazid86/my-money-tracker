@@ -1,5 +1,6 @@
 import Footer from "./components/footer";
 import { Toaster } from "../components/ui/sonner";
+import { AuthProvider } from "@/context/AuthContext";
 import type { Metadata } from "next";
 
 import {
@@ -75,15 +76,13 @@ export default function RootLayout({
 
 
       <body className="min-h-full bg-white antialiased transition-colors dark:bg-slate-950">
-
-        <main>
-          {children}
-        </main>
-
-        <Footer />
-
-        <Toaster />
-
+        <AuthProvider>
+          <main>
+            {children}
+          </main>
+          <Footer />
+          <Toaster />
+        </AuthProvider>
       </body>
 
     </html>
